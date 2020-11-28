@@ -10,8 +10,11 @@ import (
 	"./methods"
 )
 
+//Path get dir path
+//FileName get file name
 var Path, FileName string
 
+//ReadHeaderFile reads decrypted file *.toc and make list of files with offsets, sizes & arc num
 func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, InfoOff uint32, NameOffset uint32, n uint32) []methods.FileTable {
 	var fileInfo methods.FileTable
 
@@ -98,6 +101,10 @@ func main() {
 						if result != nil {
 							bytesReader := bytes.NewReader(result)
 
+							fmt.Printf("Sonic and All stars racing mod archive tool by Sudakov Pavel.\n")
+							fmt.Printf("Special thanks to aluigi for sharing script code of unpack archives.\n")
+							fmt.Println("Get file list...")
+
 							tmp := make([]byte, 4)
 							bytesReader.ReadAt(tmp, 20)
 							Offset = binary.LittleEndian.Uint32(tmp)
@@ -112,6 +119,7 @@ func main() {
 							table := make([]methods.FileTable, 0)
 							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
 
+							fmt.Println("and unpack!")
 							methods.Unpack(table, Args[i+1])
 						}
 					} else if os.IsNotExist(err) {
@@ -140,6 +148,10 @@ func main() {
 						if result != nil {
 							bytesReader := bytes.NewReader(result)
 
+							fmt.Printf("Sonic and All stars racing mod archive tool by Sudakov Pavel.\n")
+							fmt.Printf("Special thanks to aluigi for sharing script code of unpack archives.\n")
+							fmt.Println("Get file list...")
+
 							tmp := make([]byte, 4)
 							bytesReader.ReadAt(tmp, 20)
 							Offset = binary.LittleEndian.Uint32(tmp)
@@ -154,6 +166,7 @@ func main() {
 							table := make([]methods.FileTable, 0)
 							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
 
+							fmt.Println("and repack!")
 							methods.Repack(table, Args[i+1], result)
 						}
 					} else if os.IsNotExist(err) {
@@ -173,11 +186,11 @@ func main() {
 			}
 		}
 	} else {
-		fmt.Println("Use tool.exe -extract arc.file")
+		fmt.Printf("Use %s -extract arc.file\n", Args[0])
 		fmt.Println("or")
-		fmt.Println("Use tool.exe -replace arc.file")
+		fmt.Printf("Use %s -replace arc.file", Args[0])
 		fmt.Println("Directory will be created nearby tool.exe if you extract files.")
 		fmt.Println("If you want replace files make sure that directory with mod files")
-		fmt.Println("nearby tool.exe")
+		fmt.Printf("nearby %s\n", Args[0])
 	}
 }
