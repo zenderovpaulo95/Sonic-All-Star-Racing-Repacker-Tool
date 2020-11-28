@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+//FileTable - struct of header files
 type FileTable struct {
 	FileName   string
 	IsDir      uint32
@@ -21,6 +22,7 @@ type FileTable struct {
 	FileID     []byte
 }
 
+//Repack - repack archive by extracted files
 func Repack(table []FileTable, FilePath string, header []byte) {
 	var Size uint32
 	var FileOffset uint32
@@ -47,6 +49,8 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 			file.Close()
 
+			fmt.Printf("Arc num: %d\n", ArcNum)
+
 			file, err = os.Create(strings.ReplaceAll(FilePath, ".toc", ".M"+fmt.Sprintf("%02d", ArcNum)))
 			if err != nil {
 				panic(err)
@@ -68,8 +72,8 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 		table[i].Offset = FileOffset
 		table[i].ArcNum = uint32(ArcNum)
-		Size += table[i].Size
-		FileOffset += table[i].Size
+		Size += Pad(table[i].Size, 4)
+		FileOffset += Pad(table[i].Size, 4)
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].ArcNum)
@@ -83,16 +87,20 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 		binary.LittleEndian.PutUint32(tmp, table[i].Offset)
 		copy(header[table[i].HeadOffset+12:], tmp)
 
-		tmp = nil
-
 		read, err := ioutil.ReadFile(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
 
 		if err != nil {
 			panic(err)
 		}
 
-		file.Write(read)
-		fmt.Printf("HeadOff: %d\tOff: %d\tSize: %d\tFileName: %s\n", table[i].HeadOffset, table[i].Offset, table[i].Size, table[i].FileName)
+		tmp = make([]byte, Pad(table[i].Size, 4))
+		copy(tmp[0:], read)
+		file.Write(tmp)
+
+		tmp = nil
+		read = nil
+
+		fmt.Printf("Off: %d\tSize: %d\tFileName: %s\n", table[i].Offset, table[i].Size, table[i].FileName)
 	}
 
 	header = EncHeader(header)
@@ -106,6 +114,7 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 	file.Write(header)
 }
 
+//Unpack - extract files from Mxx archives where xx - number of archive
 func Unpack(table []FileTable, FilePath string) {
 	ArcFilePath := strings.ReplaceAll(FilePath, ".toc", ".M")
 
