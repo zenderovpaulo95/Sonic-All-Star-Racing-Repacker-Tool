@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,19 +48,11 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 			file.Close()
 
-			file, err = os.Create(strings.ReplaceAll(FilePath, ".toc", ".M"+fmt.Sprintf("%02d", ArcNum)))
-			if err != nil {
-				panic(err)
-			}
-
-			defer file.Close()
+			file, _ = os.Create(strings.ReplaceAll(FilePath, ".toc", ".M"+fmt.Sprintf("%02d", ArcNum)))
 		}
 
 		var fileInfo os.FileInfo
-		fileInfo, err = os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
-		if err != nil {
-			panic(err)
-		}
+		fileInfo, _ = os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
 
 		tmp := make([]byte, 8)
 		binary.LittleEndian.PutUint64(tmp, uint64(fileInfo.Size()))
@@ -85,11 +76,7 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 		binary.LittleEndian.PutUint32(tmp, table[i].Offset)
 		copy(header[table[i].HeadOffset+12:], tmp)
 
-		read, err := ioutil.ReadFile(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
-
-		if err != nil {
-			panic(err)
-		}
+		read, _ := ioutil.ReadFile(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
 
 		tmp = make([]byte, Pad(table[i].Size, 4))
 		copy(tmp[0:], read)
@@ -107,13 +94,10 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 	header = EncHeader(header)
 
-	file, err = os.Create(FilePath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
+	file, _ = os.Create(FilePath)
 	file.Write(header)
+	
+	file.Close()
 }
 
 //Unpack - extract files from Mxx archives where xx - number of archive
@@ -126,48 +110,26 @@ func Unpack(table []FileTable, FilePath string) {
 	}
 
 	for i := 0; i < len(table); i++ {
-		file, err := os.Open(ArcFilePath + fmt.Sprintf("%02d", table[i].ArcNum))
-		if err != nil {
-			log.Fatal(err)
-		}
+		table[i].FileName = strings.ReplaceAll(table[i].FileName, "//", "/")
 
-		defer file.Close()
+		file, _ := os.Open(ArcFilePath + fmt.Sprintf("%02d", table[i].ArcNum))
 
 		block := make([]byte, table[i].Size)
 
 		off, err := file.Seek(int64(table[i].Offset), 0)
-		_, err = file.ReadAt(block, off)
+		_, _ = file.ReadAt(block, off)
 
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		defer file.Close()
-
-		Dir := filepath.Dir(strings.ReplaceAll(ArcFilePath, ".M", "") + "/" + table[i].FileName)
+		Dir := filepath.Dir(strings.ReplaceAll(ArcFilePath, ".M", "") + table[i].FileName)
 		_, err = os.Stat(Dir)
 
 		if os.IsNotExist(err) {
 			os.MkdirAll(Dir, 0666)
 		}
 
-		file, err = os.Create(strings.ReplaceAll(ArcFilePath, ".M", "") + "/" + table[i].FileName)
+		file, _ = os.Create(strings.ReplaceAll(ArcFilePath, ".M", "") + table[i].FileName)
 
-		if err != nil {
-			panic(err)
-		}
+		_, _ = file.Write(block)
 
-		defer file.Close()
-
-		_, err = file.Write(block)
-
-		if err != nil {
-			panic(err)
-		}
-
-		defer file.Close()
-
-		table[i].FileName = strings.ReplaceAll(table[i].FileName, "//", "/")
 		fmt.Printf("Arc num: %d\tOff: %d\tSize: %d\tFileName: %s\n", table[i].ArcNum, table[i].Offset, table[i].Size, table[i].FileName)
 
 		block = nil
