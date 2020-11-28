@@ -186,11 +186,11 @@ func main() {
 			}
 		}
 	} else {
-		fmt.Printf("Use %s -extract arc.file\n", Args[0])
+		fmt.Printf("Use: %s -extract arc.file\n", Args[0])
 		fmt.Println("or")
-		fmt.Printf("Use %s -replace arc.file", Args[0])
+		fmt.Printf("Use: %s -replace arc.file\n", Args[0])
 		fmt.Println("Directory will be created nearby tool.exe if you extract files.")
 		fmt.Println("If you want replace files make sure that directory with mod files")
-		fmt.Printf("nearby %s\n", Args[0])
+		fmt.Println("nearby game archive and .toc file")
 	}
 }
