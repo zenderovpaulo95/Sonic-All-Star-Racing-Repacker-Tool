@@ -24,7 +24,7 @@ type FileTable struct {
 
 //Repack - repack archive by extracted files
 func Repack(table []FileTable, FilePath string, header []byte) {
-	var Size uint32
+	var Size uint64
 	var FileOffset uint32
 	var ArcNum int
 	ArcNum = 0
@@ -42,14 +42,12 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 	for i := 0; i < len(table); i++ {
 		table[i].FileName = strings.ReplaceAll(table[i].FileName, "//", "/")
 
-		if Size+table[i].Size > 4294967295 {
+		if Size+uint64(Pad(table[i].Size, 4)) > 4294967296 {
 			ArcNum++
 			FileOffset = 0
 			Size = 0
 
 			file.Close()
-
-			fmt.Printf("Arc num: %d\n", ArcNum)
 
 			file, err = os.Create(strings.ReplaceAll(FilePath, ".toc", ".M"+fmt.Sprintf("%02d", ArcNum)))
 			if err != nil {
@@ -72,7 +70,7 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 		table[i].Offset = FileOffset
 		table[i].ArcNum = uint32(ArcNum)
-		Size += Pad(table[i].Size, 4)
+		Size += uint64(Pad(table[i].Size, 4))
 		FileOffset += Pad(table[i].Size, 4)
 
 		tmp = make([]byte, 4)
@@ -100,8 +98,12 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 		tmp = nil
 		read = nil
 
-		fmt.Printf("Off: %d\tSize: %d\tFileName: %s\n", table[i].Offset, table[i].Size, table[i].FileName)
+		fmt.Printf("Arc num:%d\tOff: %d\tSize: %d\tFileName: %s\n", ArcNum, table[i].Offset, table[i].Size, table[i].FileName)
 	}
+
+	tmpArcNum := make([]byte, 4)
+	binary.LittleEndian.PutUint32(tmpArcNum, uint32(ArcNum+1))
+	copy(header[16:], tmpArcNum)
 
 	header = EncHeader(header)
 
@@ -134,7 +136,6 @@ func Unpack(table []FileTable, FilePath string) {
 		block := make([]byte, table[i].Size)
 
 		off, err := file.Seek(int64(table[i].Offset), 0)
-		//fmt.Printf("File.Seek: %d\n", off)
 		_, err = file.ReadAt(block, off)
 
 		if err != nil {
@@ -167,8 +168,9 @@ func Unpack(table []FileTable, FilePath string) {
 		defer file.Close()
 
 		table[i].FileName = strings.ReplaceAll(table[i].FileName, "//", "/")
-		fmt.Printf("HeadOff: %d\tOff: %d\tSize: %d\tFileName: %s\n", table[i].HeadOffset, table[i].Offset, table[i].Size, table[i].FileName)
+		fmt.Printf("Arc num: %d\tOff: %d\tSize: %d\tFileName: %s\n", table[i].ArcNum, table[i].Offset, table[i].Size, table[i].FileName)
 
 		block = nil
+		file.Close()
 	}
 }
