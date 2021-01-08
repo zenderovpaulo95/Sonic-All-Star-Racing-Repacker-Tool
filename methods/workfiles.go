@@ -1,6 +1,7 @@
 package methods
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
@@ -28,6 +29,7 @@ type stzFile struct {
 	Offset         uint32
 	Size           int32
 	CompressedSize int32
+	Block          []byte
 }
 
 var stzFormats [2]string = [2]string{".dat", ".rel"}
@@ -48,8 +50,10 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 	}
 
 	defer file.Close()
+	var success bool = true
 
 	for i := 0; i < len(table); i++ {
+		success = true
 		table[i].FileName = strings.ReplaceAll(table[i].FileName, "//", "/")
 
 		if Size+uint64(Pad(table[i].Size, 4)) > 4294967296 {
@@ -72,16 +76,10 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 
 		table[i].Offset = FileOffset
 		table[i].ArcNum = uint32(ArcNum)
-		Size += uint64(Pad(table[i].Size, 4))
-		FileOffset += Pad(table[i].Size, 4)
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].ArcNum)
 		copy(header[table[i].HeadOffset+8:], tmp)
-
-		tmp = make([]byte, 4)
-		binary.LittleEndian.PutUint32(tmp, table[i].Size)
-		copy(header[table[i].HeadOffset+16:], tmp)
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].Offset)
@@ -93,29 +91,97 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 		copy(tmp[0:], read)
 
 		if strings.Contains(table[i].FileName, ".stz") && stz == true {
-
-			/*TODO: think about repack stz file with dat and rel files...
-
 			_, err1 := os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[0])
 			_, err2 := os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[1])
 
-			if os.IsExist(err1) && os.IsExist(err2) {
-				for k := 0; k < 2; k++ {
-					datfile, err := ioutil.(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[k])
+			if err1 == nil && err2 == nil {
+				head := make([]byte, 0x48)
+				var commonSize uint32 = 0x48
+				copy(head, tmp[:0x48])
+				var files [2]stzFile
 
-					z, err := zlib.NewWriterLevel(b, zlib.DefaultCompression)
+				for k := 0; k < 2; k++ {
+					files[k].Offset = commonSize
+					tmpfile, err := os.Open(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[k])
 					if err != nil {
-						fmt.Println(err)
+						success = false
 					}
-					defer z.Close()
+					defer tmpfile.Close()
+
+					info, _ := tmpfile.Stat()
+
+					rawbytes := make([]byte, info.Size())
+					files[k].Size = int32(info.Size())
+
+					b := bufio.NewReader(tmpfile)
+					_, err = b.Read(rawbytes)
+
+					if err != nil {
+						success = false
+					}
+
+					var buf bytes.Buffer
+
+					writer := zlib.NewWriter(&buf)
+					writer.Write(rawbytes)
+					writer.Close()
+
+					rawbytes = buf.Bytes()
+					files[k].CompressedSize = int32(len(rawbytes))
+					commonSize += Pad(uint32(files[k].CompressedSize), 8)
+
+					files[k].Block = make([]byte, Pad(uint32(files[k].CompressedSize), 8))
+					copy(files[k].Block, rawbytes)
+
+					rawbytes = nil
 				}
-			}*/
+
+				if success {
+					tmp = make([]byte, Pad(commonSize, 32))
+					table[i].Size = uint32(len(tmp))
+					copy(tmp, head)
+					var offset uint32 = 36
+					var sOff []byte
+
+					for k := 0; k < 2; k++ {
+						sOff = make([]byte, 4)
+						binary.LittleEndian.PutUint32(sOff, files[k].Offset)
+						copy(tmp[offset:], sOff)
+						offset += 4
+
+						sOff = make([]byte, 4)
+						binary.LittleEndian.PutUint32(sOff, uint32(files[k].Size))
+						copy(tmp[offset:], sOff)
+						offset += 4
+
+						sOff = make([]byte, 4)
+						binary.LittleEndian.PutUint32(sOff, uint32(files[k].CompressedSize))
+						copy(tmp[offset:], sOff)
+						offset += 4
+
+						copy(tmp[files[k].Offset:], files[k].Block)
+					}
+
+					sOff = make([]byte, 4)
+					binary.LittleEndian.PutUint32(sOff, commonSize)
+					copy(tmp[offset:], sOff)
+				}
+
+				head = nil
+			}
 		}
 
 		file.Write(tmp)
 
 		tmp = nil
 		read = nil
+
+		tmp = make([]byte, 4)
+		binary.LittleEndian.PutUint32(tmp, table[i].Size)
+		copy(header[table[i].HeadOffset+16:], tmp)
+
+		Size += uint64(Pad(table[i].Size, 4))
+		FileOffset += Pad(table[i].Size, 4)
 
 		fmt.Printf("Arc num:%d\tOff: %d\tSize: %d\tFileName: %s\n", ArcNum, table[i].Offset, table[i].Size, table[i].FileName)
 	}
@@ -189,15 +255,15 @@ func Unpack(table []FileTable, FilePath string, stz bool) {
 				}
 				defer z.Close()
 
-				tmp, err = ioutil.ReadAll(z)
-				fmt.Printf("size %d -> tmp size %d\n", files[k].Size, len(tmp))
+				files[k].Block, err = ioutil.ReadAll(z)
+
 				if err != nil {
 					fmt.Println(err)
 				}
 
 				file, _ = os.Create(strings.ReplaceAll(ArcFilePath, ".M", "") + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[k])
 
-				file.Write(tmp)
+				file.Write(files[k].Block)
 				file.Close()
 			}
 
