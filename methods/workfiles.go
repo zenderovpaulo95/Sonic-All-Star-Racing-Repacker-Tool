@@ -1,6 +1,8 @@
 package methods
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -21,8 +23,17 @@ type FileTable struct {
 	FileID     []byte
 }
 
+type stzFile struct {
+	FileName       string
+	Offset         uint32
+	Size           int32
+	CompressedSize int32
+}
+
+var stzFormats [2]string = [2]string{".dat", ".rel"}
+
 //Repack - repack archive by extracted files
-func Repack(table []FileTable, FilePath string, header []byte) {
+func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 	var Size uint64
 	var FileOffset uint32
 	var ArcNum int
@@ -80,6 +91,27 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 		tmp = make([]byte, Pad(table[i].Size, 4))
 		copy(tmp[0:], read)
+
+		if strings.Contains(table[i].FileName, ".stz") && stz == true {
+
+			/*TODO: think about repack stz file with dat and rel files...
+
+			_, err1 := os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[0])
+			_, err2 := os.Stat(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[1])
+
+			if os.IsExist(err1) && os.IsExist(err2) {
+				for k := 0; k < 2; k++ {
+					datfile, err := ioutil.(strings.ReplaceAll(FilePath, ".toc", "") + "/" + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[k])
+
+					z, err := zlib.NewWriterLevel(b, zlib.DefaultCompression)
+					if err != nil {
+						fmt.Println(err)
+					}
+					defer z.Close()
+				}
+			}*/
+		}
+
 		file.Write(tmp)
 
 		tmp = nil
@@ -96,12 +128,12 @@ func Repack(table []FileTable, FilePath string, header []byte) {
 
 	file, _ = os.Create(FilePath)
 	file.Write(header)
-	
+
 	file.Close()
 }
 
 //Unpack - extract files from Mxx archives where xx - number of archive
-func Unpack(table []FileTable, FilePath string) {
+func Unpack(table []FileTable, FilePath string, stz bool) {
 	ArcFilePath := strings.ReplaceAll(FilePath, ".toc", ".M")
 
 	err := os.MkdirAll(strings.ReplaceAll(ArcFilePath, ".M", ""), 0666)
@@ -131,6 +163,46 @@ func Unpack(table []FileTable, FilePath string) {
 		_, _ = file.Write(block)
 
 		fmt.Printf("Arc num: %d\tOff: %d\tSize: %d\tFileName: %s\n", table[i].ArcNum, table[i].Offset, table[i].Size, table[i].FileName)
+
+		if strings.Contains(table[i].FileName, ".stz") && stz == true {
+			var files [2]stzFile
+			var headOffset uint32 = 36
+			var tmp []byte
+
+			for k := 0; k < 2; k++ {
+				tmp = block[headOffset : headOffset+4]
+				headOffset += 4
+				files[k].Offset = binary.LittleEndian.Uint32(tmp)
+
+				tmp = block[headOffset : headOffset+4]
+				headOffset += 4
+				files[k].Size = int32(binary.LittleEndian.Uint32(tmp))
+
+				tmp = block[headOffset : headOffset+4]
+				headOffset += 4
+				files[k].CompressedSize = int32(binary.LittleEndian.Uint32(tmp))
+
+				b := bytes.NewReader(block[files[k].Offset : files[k].Offset+uint32(files[k].CompressedSize)])
+				z, err := zlib.NewReader(b)
+				if err != nil {
+					fmt.Println(err)
+				}
+				defer z.Close()
+
+				tmp, err = ioutil.ReadAll(z)
+				fmt.Printf("size %d -> tmp size %d\n", files[k].Size, len(tmp))
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				file, _ = os.Create(strings.ReplaceAll(ArcFilePath, ".M", "") + strings.TrimSuffix(table[i].FileName, ".stz") + stzFormats[k])
+
+				file.Write(tmp)
+				file.Close()
+			}
+
+			tmp = nil
+		}
 
 		block = nil
 		file.Close()

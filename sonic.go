@@ -81,11 +81,13 @@ func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, Inf
 func main() {
 	Args := os.Args
 	if len(Args) > 1 {
-		var show bool
-		show = true
+		var show bool = true
+		var stz bool = false
 
 		for i := 1; i < len(Args); i++ {
 			switch Args[i] {
+			case "-stz":
+				stz = true
 			case "-extract":
 				show = false
 				if i+1 < len(Args) {
@@ -120,7 +122,7 @@ func main() {
 							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
 
 							fmt.Println("and unpack!")
-							methods.Unpack(table, Args[i+1])
+							methods.Unpack(table, Args[i+1], stz)
 						}
 					} else if os.IsNotExist(err) {
 						fmt.Printf("File %s doesn't exists!\n", Args[i+1])
@@ -167,7 +169,7 @@ func main() {
 							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
 
 							fmt.Println("and repack!")
-							methods.Repack(table, Args[i+1], result)
+							methods.Repack(table, Args[i+1], result, stz)
 						}
 					} else if os.IsNotExist(err) {
 						fmt.Printf("File %s doesn't exists!\n", Args[i+1])
