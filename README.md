@@ -1,4 +1,4 @@
-# SonicAllStarRacingRepackerTool
+# Sonic & All Star Racing Repacker Tool
 This tool helps unpack and repack archives in games Sonic and All Star racing and Sonic and All Stars Racing Transformed.
 
 Special thanks to aluigi for sharing script of decryption toc files.
