@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"./methods"
+	"sasrt/methods"
 )
 
 //Path get dir path
