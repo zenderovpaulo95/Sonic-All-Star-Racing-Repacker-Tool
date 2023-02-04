@@ -14,8 +14,8 @@ import (
 //FileName get file name
 var Path, FileName string
 
-//ReadHeaderFile reads decrypted file *.toc and make list of files with offsets, sizes & arc num
-func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, InfoOff uint32, NameOffset uint32, n uint32) []methods.FileTable {
+//ReadHeaderFile reads decrypted file *.toc and make list of files with offsets, sizes, arc num and endianess
+func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, InfoOff uint32, NameOffset uint32, n uint32, BE bool) []methods.FileTable {
 	var fileInfo methods.FileTable
 
 	Path += FileName + "/"
@@ -31,26 +31,41 @@ func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, Inf
 		tmp := make([]byte, 4)
 		bytesReader.ReadAt(tmp, int64(Offset))
 		fileInfo.IsDir = binary.LittleEndian.Uint32(tmp)
+		if BE == true {
+			fileInfo.IsDir = binary.BigEndian.Uint32(tmp)
+		}
 		Offset += 4
 
 		tmp = make([]byte, 4)
 		bytesReader.ReadAt(tmp, int64(Offset))
 		fileInfo.ArcNum = binary.LittleEndian.Uint32(tmp)
+		if BE == true {
+			fileInfo.ArcNum = binary.BigEndian.Uint32(tmp)
+		}
 		Offset += 4
 
 		tmp = make([]byte, 4)
 		bytesReader.ReadAt(tmp, int64(Offset))
 		fileInfo.Offset = binary.LittleEndian.Uint32(tmp)
+		if BE == true {
+			fileInfo.Offset = binary.BigEndian.Uint32(tmp)
+		}
 		Offset += 4
 
 		tmp = make([]byte, 4)
 		bytesReader.ReadAt(tmp, int64(Offset))
 		fileInfo.Size = binary.LittleEndian.Uint32(tmp)
+		if BE == true {
+			fileInfo.Size = binary.BigEndian.Uint32(tmp)
+		}
 		Offset += 4
 
 		tmp = make([]byte, 4)
 		bytesReader.ReadAt(tmp, int64(Offset))
 		fileInfo.NameOff = binary.LittleEndian.Uint32(tmp)
+		if BE == true {
+			fileInfo.NameOff = binary.BigEndian.Uint32(tmp)
+		}
 		Offset += 4
 
 		curOffset := Offset
@@ -67,7 +82,7 @@ func ReadHeaderFile(header []byte, table []methods.FileTable, Offset uint32, Inf
 			curOffset = InfoOff + (fileInfo.Offset * (4 + 4 + 4 + 4 + 4 + 4))
 			var dirPath string
 			dirPath = FileName + "/"
-			table = ReadHeaderFile(header, table, curOffset, InfoOff, NameOffset, fileInfo.Size)
+			table = ReadHeaderFile(header, table, curOffset, InfoOff, NameOffset, fileInfo.Size, BE)
 			Path = strings.ReplaceAll(Path, dirPath, "")
 		} else {
 			fileInfo.FileName = Path + FileName
@@ -83,11 +98,14 @@ func main() {
 	if len(Args) > 1 {
 		var show bool = true
 		var stz bool = false
+		var BE bool = false //Need big endian
 
 		for i := 1; i < len(Args); i++ {
 			switch Args[i] {
 			case "-stz":
 				stz = true
+			case "-Xbox360", "-PS3":
+				BE = true
 			case "-extract":
 				show = false
 				if i+1 < len(Args) {
@@ -110,19 +128,25 @@ func main() {
 							tmp := make([]byte, 4)
 							bytesReader.ReadAt(tmp, 20)
 							Offset = binary.LittleEndian.Uint32(tmp)
+							if BE == true {
+								Offset = binary.BigEndian.Uint32(tmp)
+							}
 
 							tmp = make([]byte, 4)
 							bytesReader.ReadAt(tmp, 24)
 							NameOffset = binary.LittleEndian.Uint32(tmp)
+							if BE == true {
+								NameOffset = binary.BigEndian.Uint32(tmp)
+							}
 
 							FileName = ""
 							Path = ""
 
 							table := make([]methods.FileTable, 0)
-							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
+							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1, BE)
 
 							fmt.Println("and unpack!")
-							methods.Unpack(table, Args[i+1], stz)
+							methods.Unpack(table, Args[i+1], stz, BE)
 						}
 					} else if os.IsNotExist(err) {
 						fmt.Printf("File %s doesn't exists!\n", Args[i+1])
@@ -157,19 +181,25 @@ func main() {
 							tmp := make([]byte, 4)
 							bytesReader.ReadAt(tmp, 20)
 							Offset = binary.LittleEndian.Uint32(tmp)
+							if BE == true {
+								Offset = binary.BigEndian.Uint32(tmp)
+							}
 
 							tmp = make([]byte, 4)
 							bytesReader.ReadAt(tmp, 24)
 							NameOffset = binary.LittleEndian.Uint32(tmp)
+							if BE == true {
+								NameOffset = binary.BigEndian.Uint32(tmp)
+							}
 
 							FileName = ""
 							Path = ""
 
 							table := make([]methods.FileTable, 0)
-							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1)
+							table = ReadHeaderFile(result, table, Offset, Offset, NameOffset, 1, BE)
 
 							fmt.Println("and repack!")
-							methods.Repack(table, Args[i+1], result, stz)
+							methods.Repack(table, Args[i+1], result, stz, BE)
 						}
 					} else if os.IsNotExist(err) {
 						fmt.Printf("File %s doesn't exists!\n", Args[i+1])
@@ -188,10 +218,14 @@ func main() {
 			}
 		}
 	} else {
-		fmt.Printf("Use: %s -extract arc.file\n", Args[0])
-		fmt.Println("or")
-		fmt.Printf("Use: %s -replace arc.file\n", Args[0])
-		fmt.Println("Directory will be created nearby tool.exe if you extract files.")
+		fmt.Printf("How to use: %s [options] [action] example.toc\n", Args[0])
+		fmt.Println("Options:")
+		fmt.Println("-stz - try unpack/repack stz files")
+		fmt.Println("-PS3 or -Xbox360 - work with PS3/Xbox360 archives")
+		fmt.Println("Action:")
+		fmt.Println("-extract - extract files from Mxx archives")
+		fmt.Println("-repack - repack archives with your modified files\n\n")
+		fmt.Printf("Directory will be created nearby %s if you extract files.\n", Args[0])
 		fmt.Println("If you want replace files make sure that directory with mod files")
 		fmt.Println("nearby game archive and .toc file")
 	}

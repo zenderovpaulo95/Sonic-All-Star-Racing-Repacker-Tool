@@ -35,7 +35,7 @@ type stzFile struct {
 var stzFormats [2]string = [2]string{".dat", ".rel"}
 
 //Repack - repack archive by extracted files
-func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
+func Repack(table []FileTable, FilePath string, header []byte, stz bool, BE bool) {
 	var Size uint64
 	var FileOffset uint32
 	var ArcNum int
@@ -79,10 +79,18 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].ArcNum)
+		if BE == true {
+			tmp = make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp, table[i].ArcNum)
+		}
 		copy(header[table[i].HeadOffset+8:], tmp)
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].Offset)
+		if BE == true {
+			tmp = make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp, table[i].Offset)
+		}
 		copy(header[table[i].HeadOffset+12:], tmp)
 
 		read, _ := ioutil.ReadFile(strings.ReplaceAll(FilePath, ".toc", "") + "/" + table[i].FileName)
@@ -146,16 +154,28 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 					for k := 0; k < 2; k++ {
 						sOff = make([]byte, 4)
 						binary.LittleEndian.PutUint32(sOff, files[k].Offset)
+						if BE == true {
+							tmp = make([]byte, 4)
+							binary.BigEndian.PutUint32(sOff, files[k].Offset)
+						}
 						copy(tmp[offset:], sOff)
 						offset += 4
 
 						sOff = make([]byte, 4)
 						binary.LittleEndian.PutUint32(sOff, uint32(files[k].Size))
+						if BE == true {
+							tmp = make([]byte, 4)
+							binary.BigEndian.PutUint32(sOff, uint32(files[k].Size))
+						}
 						copy(tmp[offset:], sOff)
 						offset += 4
 
 						sOff = make([]byte, 4)
 						binary.LittleEndian.PutUint32(sOff, uint32(files[k].CompressedSize))
+						if BE == true {
+							tmp = make([]byte, 4)
+							binary.BigEndian.PutUint32(sOff, uint32(files[k].CompressedSize))
+						}
 						copy(tmp[offset:], sOff)
 						offset += 4
 
@@ -164,6 +184,10 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 
 					sOff = make([]byte, 4)
 					binary.LittleEndian.PutUint32(sOff, commonSize)
+					if BE == true {
+						tmp = make([]byte, 4)
+						binary.BigEndian.PutUint32(sOff, commonSize)
+					}
 					copy(tmp[offset:], sOff)
 				}
 
@@ -178,6 +202,10 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 
 		tmp = make([]byte, 4)
 		binary.LittleEndian.PutUint32(tmp, table[i].Size)
+		if BE == true {
+			tmp = make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp, table[i].Size)
+		}
 		copy(header[table[i].HeadOffset+16:], tmp)
 
 		Size += uint64(Pad(table[i].Size, 4))
@@ -188,6 +216,10 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 
 	tmpArcNum := make([]byte, 4)
 	binary.LittleEndian.PutUint32(tmpArcNum, uint32(ArcNum+1))
+	if BE == true {
+		tmpArcNum = make([]byte, 4)
+		binary.BigEndian.PutUint32(tmpArcNum, uint32(ArcNum+1))
+	}
 	copy(header[16:], tmpArcNum)
 
 	header = EncHeader(header)
@@ -199,7 +231,7 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool) {
 }
 
 //Unpack - extract files from Mxx archives where xx - number of archive
-func Unpack(table []FileTable, FilePath string, stz bool) {
+func Unpack(table []FileTable, FilePath string, stz bool, BE bool) {
 	ArcFilePath := strings.ReplaceAll(FilePath, ".toc", ".M")
 
 	err := os.MkdirAll(strings.ReplaceAll(ArcFilePath, ".M", ""), 0666)
@@ -239,14 +271,23 @@ func Unpack(table []FileTable, FilePath string, stz bool) {
 				tmp = block[headOffset : headOffset+4]
 				headOffset += 4
 				files[k].Offset = binary.LittleEndian.Uint32(tmp)
+				if BE == true {
+					files[k].Offset = binary.BigEndian.Uint32(tmp)
+				}
 
 				tmp = block[headOffset : headOffset+4]
 				headOffset += 4
 				files[k].Size = int32(binary.LittleEndian.Uint32(tmp))
+				if BE == true {
+					files[k].Size = int32(binary.BigEndian.Uint32(tmp))
+				}
 
 				tmp = block[headOffset : headOffset+4]
 				headOffset += 4
 				files[k].CompressedSize = int32(binary.LittleEndian.Uint32(tmp))
+				if BE == true {
+					files[k].CompressedSize = int32(binary.BigEndian.Uint32(tmp))
+				}
 
 				b := bytes.NewReader(block[files[k].Offset : files[k].Offset+uint32(files[k].CompressedSize)])
 				z, err := zlib.NewReader(b)
