@@ -234,7 +234,7 @@ func Repack(table []FileTable, FilePath string, header []byte, stz bool, BE bool
 func Unpack(table []FileTable, FilePath string, stz bool, BE bool) {
 	ArcFilePath := strings.ReplaceAll(FilePath, ".toc", ".M")
 
-	err := os.MkdirAll(strings.ReplaceAll(ArcFilePath, ".M", ""), 0666)
+	err := os.MkdirAll(strings.ReplaceAll(ArcFilePath, ".M", ""), os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
@@ -253,7 +253,7 @@ func Unpack(table []FileTable, FilePath string, stz bool, BE bool) {
 		_, err = os.Stat(Dir)
 
 		if os.IsNotExist(err) {
-			os.MkdirAll(Dir, 0666)
+			os.MkdirAll(Dir, os.ModePerm)
 		}
 
 		file, _ = os.Create(strings.ReplaceAll(ArcFilePath, ".M", "") + table[i].FileName)
